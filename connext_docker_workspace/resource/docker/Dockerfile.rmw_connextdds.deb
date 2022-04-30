@@ -1,0 +1,93 @@
+################################################################################
+# (c) 2022 Copyright, Real-Time Innovations, Inc. (RTI) All rights reserved.
+# RTI grants Licensee a license to use, modify, compile, and create derivative
+# works of the Software solely in combination with RTI Connext DDS. Licensee
+# may redistribute copies of the Software provided that all such copies are
+# subject to this License. The Software is provided "as is", with no warranty
+# of any type, including any warranty for fitness for any purpose. RTI is
+# under no obligation to maintain or support the Software. RTI shall not be
+# liable for any incidental or consequential damages arising out of the use or
+# inability to use the Software. For purposes of clarity, nothing in this
+# License prevents Licensee from using alternate versions of DDS, provided
+# that Licensee may not combine or link such alternate versions of DDS with
+# the Software.
+################################################################################
+# This Dockerfile can be used to create containers that will run
+# ROS 2 applications with a copy of RTI Connext DDS installed via binary
+# Debian packages.
+################################################################################
+# You can use any of the ROS 2 base images available on Docker Hub by specifying
+# the name of the image with argument BASE_IMAGE.
+################################################################################
+ARG BASE_IMAGE=osrf/ros:galactic-desktop
+
+FROM ${BASE_IMAGE}
+
+################################################################################
+# Install Connext DDS.
+################################################################################
+# Use the community-licensed Debian packages for Connext DDS available in the
+# ROS 2 Debian repositories. Variable RTI_NC_LICENSE_ACCEPTED is used to
+# perform an unattended installation and automatically accept the license
+# agreement.
+# Use argument CONNEXTDDS_DEB to customize the package used to install Connext.
+################################################################################
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update
+RUN RTI_NC_LICENSE_ACCEPTED=yes \
+    apt-get install -y rti-connext-dds-6.0.1
+
+ENV CONNEXTDDS_DIR=/opt/rti.com/rti_connext_dds-6.0.1
+ENV CONNEXTDDS_ARCH=x64Linux4gcc7.3.0
+
+################################################################################
+# Now that Connext DDS is available, clone rmw_connextdds, load ROS, then build
+# it. Variable ROS_DISTRO is used to determine which branch to clone. This
+# variable should be already set by the base Docker image.
+# The `master` branch will be used if ROS_DISTRO is "rolling".
+# Otherwise the branch corresponding to the specified ROS_DISTRO will be used.
+################################################################################
+ENV RMW_CONNEXTDDS_INSTALL_DIR=/opt/ros/${ROS_DISTRO}-connext
+RUN if [ "${ROS_DISTRO}" = "rolling" ]; then\
+      rmw_branch="master";\
+    else\
+      rmw_branch="${ROS_DISTRO}";\
+    fi \
+    && git clone -b ${rmw_branch} \
+           https://github.com/ros2/rmw_connextdds \
+           /tmp/rmw_connextdds
+
+RUN . ${CONNEXTDDS_DIR}/resource/scripts/rtisetenv_${CONNEXTDDS_ARCH}.sh \
+    && . /opt/ros/${ROS_DISTRO}/setup.sh \
+    && cd /tmp/rmw_connextdds \
+    && MAKEFLAGS=-j$(nproc) colcon build --symlink-install \
+    && mv install ${RMW_CONNEXTDDS_INSTALL_DIR}
+
+################################################################################
+# Configure the environment so that rmw_connextdds is used automatically.
+################################################################################
+ENV RMW_IMPLEMENTATION=rmw_connextdds
+
+################################################################################
+# Add a non-root user/group which will be mapped to the user/group running the
+# container in the host system.
+################################################################################
+ARG DOCKER_USER=admin
+ARG DOCKER_UID=1000
+ARG DOCKER_GID=1000
+
+RUN groupadd --gid ${DOCKER_GID} ${DOCKER_USER}
+RUN useradd --uid ${DOCKER_UID} --gid ${DOCKER_GID} -m ${DOCKER_USER}
+RUN echo ${DOCKER_USER} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${DOCKER_USER} \
+    && chmod 0440 /etc/sudoers.d/${DOCKER_USER} \
+    && adduser ${DOCKER_USER} sudo
+
+################################################################################
+# Set the container's entrypoint to a custom script which will load ROS and
+# rmw_connextdds in the environment then execute the user provided command, or
+# start a shell if no command was specified
+################################################################################
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT [ "/entrypoint.sh" ]
+CMD ["__default__"]

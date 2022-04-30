@@ -1,0 +1,155 @@
+################################################################################
+# (c) 2022 Copyright, Real-Time Innovations, Inc. (RTI) All rights reserved.
+# RTI grants Licensee a license to use, modify, compile, and create derivative
+# works of the Software solely in combination with RTI Connext DDS. Licensee
+# may redistribute copies of the Software provided that all such copies are
+# subject to this License. The Software is provided "as is", with no warranty
+# of any type, including any warranty for fitness for any purpose. RTI is
+# under no obligation to maintain or support the Software. RTI shall not be
+# liable for any incidental or consequential damages arising out of the use or
+# inability to use the Software. For purposes of clarity, nothing in this
+# License prevents Licensee from using alternate versions of DDS, provided
+# that Licensee may not combine or link such alternate versions of DDS with
+# the Software.
+################################################################################
+# This Dockerfile can be used to create containers that will run
+# ROS 2 applications with a copy of RTI Connext DDS installed using the
+# official bundles provided by RTI.
+################################################################################
+# You can use any of the ROS 2 base images available on Docker Hub by specifying
+# the name of the image with argument BASE_IMAGE.
+################################################################################
+ARG BASE_IMAGE=osrf/ros:galactic-desktop
+
+################################################################################
+# Define a first  build stage to create a "base environment" with some common
+# variables derived from user arguments.
+################################################################################
+FROM ${BASE_IMAGE} AS base_env
+
+################################################################################
+# Install Connext DDS.
+################################################################################
+# The Dockerfile will install Connext inside the container using the official
+# installers. 
+# 
+# The installers must be either copied or symlinked in the `archives/`
+# sub-directory so that they may be sent to the Docker daemon, e.g.:
+#
+#   mkdir connext_node_helpers/resource/docker/archives
+#   cp /path/to/packages/*\.{rtipkg,run} \
+#      connext_node_helpers/resource/docker/archives/
+#
+# The Dockerfile will automatically guess the name of the required host and
+# target installers based on build arguments CONNEXTDDS_VERSION,
+# CONNEXTDDS_HOST_ARCH, and CONNEXTDDS_ARCH.
+#
+# You must also provide a valid license file by copying it in the `archives`
+# sub-directory:
+#
+#   cp /path/to/my/rti_license.dat \
+#      connext_node_helpers/resource/docker/archives/rti_license.dat
+#
+# The script will also load Connext DDS into the shell environment by setting
+# CONNEXTDDS_DIR, so that rmw_connextdds may later pick it up during build.
+#
+################################################################################
+ARG CONNEXTDDS_VERSION=6.1.0
+ARG CONNEXTDDS_HOST_ARCH=x64Linux
+ARG CONNEXTDDS_ARCH=x64Linux4gcc7.3.0
+ARG CONNEXTDDS_INSTALLER_HOST=rti_connext_dds-${CONNEXTDDS_VERSION}-pro-host-${CONNEXTDDS_HOST_ARCH}.run
+ARG CONNEXTDDS_INSTALLER_TARGET=rti_connext_dds-${CONNEXTDDS_VERSION}-pro-target-${CONNEXTDDS_ARCH}.rtipkg
+ARG CONNEXTDDS_INSTALLER_LICENSE=rti_license.dat
+
+ENV CONNEXTDDS_VERSION=${CONNEXTDDS_VERSION}
+ENV CONNEXTDDS_HOST_ARCH=${CONNEXTDDS_HOST_ARCH}
+ENV CONNEXTDDS_ARCH=${CONNEXTDDS_ARCH}
+ENV CONNEXTDDS_INSTALLER_HOST=${CONNEXTDDS_INSTALLER_HOST}
+ENV CONNEXTDDS_INSTALLER_TARGET=${CONNEXTDDS_INSTALLER_TARGET}
+ENV CONNEXTDDS_INSTALLER_LICENSE=${CONNEXTDDS_INSTALLER_LICENSE}
+ENV CONNEXTDDS_INSTALLER_DIR=/archives
+ENV CONNEXTDDS_INSTALL_PREFIX=/opt/rti.com
+ENV CONNEXTDDS_DIR=${CONNEXTDDS_INSTALL_PREFIX}/rti_connext_dds-${CONNEXTDDS_VERSION}
+ENV RMW_CONNEXTDDS_INSTALL_DIR=/opt/ros/${ROS_DISTRO}-connext
+
+################################################################################
+# Define a new  build stage to install Connext DDS and build rmw_connextdds.
+################################################################################
+FROM base_env AS install
+
+COPY archives/${CONNEXTDDS_INSTALLER_HOST} \
+     archives/${CONNEXTDDS_INSTALLER_TARGET} \
+     archives/${CONNEXTDDS_INSTALLER_LICENSE} \
+     ${CONNEXTDDS_INSTALLER_DIR}/
+
+RUN mkdir -p ${CONNEXTDDS_INSTALL_PREFIX}
+RUN "${CONNEXTDDS_INSTALLER_DIR}/${CONNEXTDDS_INSTALLER_HOST}" \
+      --mode unattended  \
+      --disable_copy_examples true \
+      --prefix "${CONNEXTDDS_INSTALL_PREFIX}"
+RUN "${CONNEXTDDS_DIR}/bin/rtipkginstall" -u \
+         "${CONNEXTDDS_INSTALLER_DIR}/${CONNEXTDDS_INSTALLER_TARGET}"
+RUN cp "${CONNEXTDDS_INSTALLER_DIR}/${CONNEXTDDS_INSTALLER_LICENSE}" \
+          ${CONNEXTDDS_DIR}/rti_license.dat
+
+################################################################################
+# Begin final build stage to copy Connext DDS and rmw_connextdds installations,
+# and to perform final configurations.
+################################################################################
+FROM base_env AS final
+
+################################################################################
+# Copy the installed Connext directory from the previous stage.
+################################################################################
+COPY --from=install ${CONNEXTDDS_DIR} ${CONNEXTDDS_DIR}
+
+################################################################################
+# Now that Connext DDS is available, clone rmw_connextdds, load ROS, then build
+# it. Variable ROS_DISTRO is used to determine which branch to clone. This
+# variable should be already set by the base Docker image.
+# The `master` branch will be used if ROS_DISTRO is "rolling".
+# Otherwise the branch corresponding to the specified ROS_DISTRO will be used.
+################################################################################
+RUN if [ "${ROS_DISTRO}" = "rolling" ]; then\
+      rmw_branch="master";\
+    else\
+      rmw_branch="${ROS_DISTRO}";\
+    fi \
+    && git clone -b ${rmw_branch} \
+           https://github.com/ros2/rmw_connextdds \
+           /tmp/rmw_connextdds
+
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
+    && cd /tmp/rmw_connextdds \
+    && MAKEFLAGS=-j$(nproc) colcon build --symlink-install \
+          --cmake-args -DCONNEXTDDS_ARCH=${CONNEXTDDS_ARCH} \
+    && mv install ${RMW_CONNEXTDDS_INSTALL_DIR}
+
+################################################################################
+# Configure the environment so that rmw_connextdds is used automatically.
+################################################################################
+ENV RMW_IMPLEMENTATION=rmw_connextdds
+
+################################################################################
+# Add a non-root user/group which will be mapped to the user/group running the
+# container in the host system.
+################################################################################
+ARG DOCKER_USER=admin
+ARG DOCKER_UID=1000
+ARG DOCKER_GID=1000
+
+RUN groupadd --gid ${DOCKER_GID} ${DOCKER_USER}
+RUN useradd --uid ${DOCKER_UID} --gid ${DOCKER_GID} -m ${DOCKER_USER}
+RUN echo ${DOCKER_USER} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${DOCKER_USER} \
+    && chmod 0440 /etc/sudoers.d/${DOCKER_USER} \
+    && adduser ${DOCKER_USER} sudo
+
+################################################################################
+# Set the container's entrypoint to a custom script which will load ROS and
+# rmw_connextdds in the environment then execute the user provided command, or
+# start a shell if no command was specified
+################################################################################
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT [ "/entrypoint.sh" ]
+CMD ["__default__"]

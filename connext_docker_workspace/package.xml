@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>connext_docker_workspace</name>
+  <version>0.1.0</version>
+  <description>Docker containers for easy development of ROS 2 applications with RTI Connext DDS</description>
+  <maintainer email="asorbini@rti.com">asorbini</maintainer>
+  <license>RTI-FREE-TO-USE</license>
+
+  <depend>rmw_connextdds</depend>
+  <depend>demo_nodes_cpp</depend>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

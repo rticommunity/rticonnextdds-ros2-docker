@@ -1,0 +1,211 @@
+# Docker containers for ROS 2 development with RTI Connext DDS
+
+This repository can be used to generate Docker images for
+developing and running ROS 2 application with RTI Connext DDS inside
+Docker containers.
+
+A convenience script is provided to instantiate a container
+that mounts a local directory, allowing you to easily build your 
+project inside a preconfigured environment.
+
+## Local Workspace Quickstart
+
+The following workflow will allow to create a Docker container which
+mounts a local directory (i.e. your ROS 2 project), enabling you to quickly build and test your application with RTI Connext DDS.
+
+1. [Install Docker](https://docs.docker.com/engine/install/) and
+   [enable non-root access for your user](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user).
+
+2. Clone this repository:
+
+   ```sh
+   git clone https://github.com/asorbini/rticonnextdds-ros2-docker
+   ```
+
+3. Use the `run_workspace.sh` script to build a development container
+   and mount your workspace directory inside it (specified with variable `WORKSPACE_DIR`).
+
+   You can provision RTI Connext DDS inside the container in multiple ways:
+
+   - Use an RTI Connext DDS installation from the host:
+
+     - Copy the Connext installation directory inside
+       `connext_docker_workspace/resource/docker/archives`. E.g.
+       if using Connext DDS 6.1.0:
+
+       ```sh
+       cp -r \
+         /path/to/rti_connext_dds-6.1.0 \
+         connext_docker_workspace/resource/docker/archives
+       ```
+
+     - Build and start the container. Specify the name of the installation
+       directory using variable `CONNEXTDDS_HOST_DIR`, e.g.:
+
+       ```sh
+       WORKSPACE_DIR=/path/to/workspace-directory \
+       CONNEXTDDS_HOST_DIR=rti_connext_dds-6.1.0 \
+       connext_docker_workspace/scripts/run_workspace.sh
+       ```
+
+   - Install RTI Connext DDS using the official installers:
+
+     - Copy the installers (host and target), and your license file
+       inside `connext_docker_workspace/resource/docker/archives`, e.g.:
+
+       ```sh
+       mkdir connext_docker_workspace/resource/docker/archives
+       ln -s \
+          /path/to/rti_connext_dds-6.1.0-pro-host-x64Linux.run \
+          /path/to/rti_connext_dds-6.1.0-pro-target-x64Linux4gcc7.3.0.rtipkg \
+          /path/to/rti_license.dat \
+          connext_docker_workspace/resource/docker/archives/
+       ```
+
+     - Build and start the container:
+
+       ```sh
+       WORKSPACE_DIR=/path/to/workspace-directory \
+       connext_docker_workspace/scripts/run_workspace.sh
+       ```
+
+   - Install RTI Connext DDS using a Debian package (x86_64 only):
+
+     - The community-licensed version included in the binary package distributed
+       via the ROS 2 Debian repository can only be used for non-commercial and
+       pre-production applications.
+
+     - Build and start the container with variable CONNEXTDDS_DEB
+       set to a non-empty value:
+
+       ```sh
+       WORKSPACE_DIR=/path/to/workspace \
+       CONNEXTDDS_DEB=y \
+       connext_docker_workspace/scripts/run_workspace.sh
+       ```
+
+4. Build your ROS 2 code and run it with Connext.
+
+   The container will be already configured with the appropriate environment to load Connext and to select it as the RMW layer for
+   your ROS 2 application.
+
+   If your workspace directory is a git repository you might want to add
+   `/build`, `/log`, and `/install` to your `.gitignore` file.
+
+   ```sh
+   colcon build --symlink-install
+   source install/setup.bash
+   ros2 run my_package my_application
+   ```
+
+### Example Workspace
+
+If `WORKSPACE_DIR` is not specified, the `run_workspace.sh` script
+will fall back to the local clone of this repository.
+
+After building the repository with `colcon`, you can use the provided
+[example launch files](connext_docker_workspace/launch) to start some
+ROS 2 applications on top of Connext DDS, e.g.:
+
+```sh
+ros2 launch connext_docker_workspace talker-listener.launch.py
+
+```
+
+### Additional Arguments
+
+The `run_workspace.sh` script is controlled via the following 
+environment variables:
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+|`DOCKER_CONTAINER`|Name of the container created by the script|`rmw_connextdds-dev`|
+|`DOCKER_DIR`|Directory containing the build context sent to the Docker daemon|[connext_docker_workspace/resource/docker](connext_docker_workspace/resource/docker)|
+|`DOCKER_FILE`|Dockerfile used to build the commercial licensed version of the container|[${DOCKER_DIR}/Dockerfile.rmw_connextdds](connext_docker_workspace/resource/docker/Dockerfile.rmw_connextdds)||`DOCKER_FILE_COMMUNITY`|Dockerfile used to build the community licensed version of the container|[${DOCKER_DIR}/Dockerfile.rmw_connextdds.community](connext_docker_workspace/resource/docker/Dockerfile.rmw_connextdds.community)|
+|`DOCKER_IMAGE`|Name and tag of the image generated by the script|`rmw_connextdds:latest`|
+|`WORKSPACE_DIR`|Directory containing ROS 2 code that will be mounted inside the container|Path of the local clone of this repository|
+
+The script also accepts environment variables matching the build arguments
+defined by each included image. If specified, these variables will be
+automatically detected, and passed to the `docker build` command.
+
+## Docker Images
+
+All images are built on top of one of the [ROS 2 images provided by OpenRobotics](https://github.com/osrf/docker_images), and they follow a similar build workflow:
+
+- Add a non-root user to match the user which owns the workspace directory on the
+  host.
+- Install RTI Connext DDS.
+- Clone and build `rmw_connextdds`
+- Set `rmw_connextdds` as the default RMW_IMPLEMENTATION
+- Configure a custom entrypoint script which will automatically configure
+  the development environment, and possibly start a custom command passed to
+  `docker run`.
+
+### Common Build Arguments
+
+The following build arguments are accepted by all Dockerfiles:
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+|`BASE_IMAGE`|Base Docker image.|`osrf/ros:galactic-desktop`|
+|`DOCKER_GID`|Id of the main group for the container's non-root user|Id of the main group of the current user (`id -g`)|
+|`DOCKER_UID`|Id of the container's non-root user|Id of the current user (`id -u`)|
+|`DOCKER_USER`|Name of the non-root user created inside the container to map the host's user|Current user (`${LOGNAME}`)|
+
+### Dockerfile.rmw_connextdds.host
+
+This Dockerfile will generate a development image which contains a copy of
+RTI Connext DDS which has been pre-installed on the host machine.
+
+The Dockerfile will copy this installation specified by argument
+`CONNEXTDDS_DIR` "as is".
+This directory must contain a valid license file and target libraries.
+If multiple target libraries are installed, the desired target architecture must be specified using argument `CONNEXTDDS_ARCH`.
+
+#### Build Arguments for Dockerfile.rmw_connextdds.host
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+|`CONNEXTDDS_ARCH`|Target architecture to use. |None|
+|`CONNEXTDDS_HOST_DIR`|Directory containing the installation of RTI Connext DDS to use inside the container|None|
+
+### Dockerfile.rmw_connextdds.rtipkg
+
+This Dockerfile will generate a development image which contains a copy
+of RTI Connext DDS installed from the official bundles provided by RTI.
+
+The Dockerfile expects to find the required installers in subdirectory
+`archives/`. Files must be either symlinked or copied inside this directory for
+them to be sent to the Docker daemon as part of the build context. They will
+then be copied inside the generated image.
+
+Beside the target and host installers, you will also need to provide a valid
+license file.
+
+The Dockerfile will try to guess the name of the installers to use based on
+arguments `CONNEXTDDS_ARCH`, `CONNEXTDDS_HOST_ARCH`, and `CONNEXTDDS_VERSION`.
+The license file is expected to be named `rti_license.dat`.
+
+You can specify the full name of the installers, and the license
+file using arguments `CONNEXTDDS_INSTALLER_HOST`, `CONNEXTDDS_INSTALLER_TARGET`,
+and `CONNEXTDDS_INSTALLER_LICENSE`.
+
+You must always make sure that `CONNEXTDDS_ARCH` matches your installation, even when providing explicit installer names, in order to properly initialize the environment inside the container.
+
+#### Build Arguments for Dockerfile.rmw_connextdds.rtipkg
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+|`CONNEXTDDS_ARCH`|Target architecture, used to guess the name of the target bundle and to select the target libraries to use when building `rmw_connextdds`.|`x64Linux4gcc7.3.0`|
+|`CONNEXTDDS_HOST_ARCH`|Host architecture, used to guess the name of the host bundle.|`x64Linux`|
+|`CONNEXTDDS_INSTALLER_HOST`|Full name (without path) of the host bundle which will be used instead of trying to derive it from other parameters|`rti_connext_dds-${CONNEXTDDS_VERSION}-pro-host-${CONNEXTDDS_HOST_ARCH}.run`|
+|`CONNEXTDDS_INSTALLER_LICENSE`|Name (without path) of the license file.|`rti_license.dat`|
+|`CONNEXTDDS_INSTALLER_TARGET`|Full name (without path) of the target bundle which will be used instead of trying to derive it from other parameters|`rti_connext_dds-${CONNEXTDDS_VERSION}-pro-target-${CONNEXTDDS_ARCH}.rtipkg`|
+|`CONNEXTDDS_VERSION`|Version identifier for Connext DDS, used to guess the name of the host and target bundles|`6.1.0`|
+
+### Dockerfile.rmw_connextdds.deb
+
+This Dockerfile will generate a development image which includes a copy of
+RTI Connext DDS installed using the community-licensed package distributed
+via the ROS 2 Debian repository.
