@@ -130,6 +130,14 @@ The script also accepts environment variables matching the build arguments
 defined by each included image. If specified, these variables will be
 automatically detected, and passed to the `docker build` command.
 
+### Docker Compose Example 
+You can use the following command to run talker and listener on different Docker containers. This example uses the shared memory transport. 
+
+```sh
+WORKSPACE_DIR=/path/to/workspace-directory \
+docker-compose -f connext_docker_workspace/resource/docker_compose/docker-compose.yaml up -d
+```
+
 ## Docker Images
 
 All images are built on top of one of the [ROS 2 images provided by OpenRobotics](https://github.com/osrf/docker_images), and they follow a similar build workflow:
