@@ -34,9 +34,10 @@ mounts a local directory (i.e. your ROS 2 project), enabling you to quickly buil
        if using Connext DDS 6.1.0:
 
        ```sh
+       mkdir connext_docker_workspace/resource/docker/archives
        cp -r \
          /path/to/rti_connext_dds-6.1.0 \
-         connext_docker_workspace/resource/docker/archives
+         connext_docker_workspace/resource/docker/archives/
        ```
 
      - Build and start the container. Specify the name of the installation
