@@ -16,8 +16,7 @@
 # ROS 2 applications with a copy of RTI Connext DDS copied from the host
 # machine.
 #
-# You can use any of the ROS 2 base images available on Docker Hub by specifying
-# the name of the image with argument BASE_IMAGE.
+# The installation directory must be stored in the archives/ subdirectory.
 ################################################################################
 ARG BASE_IMAGE=osrf/ros:galactic-desktop
 
@@ -43,13 +42,17 @@ COPY archives/${CONNEXTDDS_HOST_DIR} \
 # Otherwise the branch corresponding to the specified ROS_DISTRO will be used.
 ################################################################################
 ENV RMW_CONNEXTDDS_INSTALL_DIR=/opt/ros/${ROS_DISTRO}-connext
-RUN if [ "${ROS_DISTRO}" = "rolling" ]; then\
+ARG RMW_CONNEXTDDS_URL=https://github.com/ros2/rmw_connextdds
+ARG RMW_CONNEXTDDS_BRANCH=
+RUN if [ -n "${RMW_CONNEXTDDS_BRANCH}" ]; then \
+      rmw_branch="${RMW_CONNEXTDDS_BRANCH}"; \
+    elif [ "${ROS_DISTRO}" = "rolling" ]; then\
       rmw_branch="master";\
     else\
       rmw_branch="${ROS_DISTRO}";\
     fi \
     && git clone -b ${rmw_branch} \
-           https://github.com/ros2/rmw_connextdds \
+           ${RMW_CONNEXTDDS_URL} \
            /tmp/rmw_connextdds
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \

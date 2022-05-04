@@ -26,37 +26,28 @@
 #
 # Connext DDS can be provisioned inside the contained image in multiple ways.
 #
-# By default, RTI Connext DDS will be installed using the official installers
-# provided by RTI. The script expects to find the required installer files, and
-# a valid license inside directory connext_docker_workspace/resource/docker/archives.
+# By default, the script will try to detect and use a host installation, by
+# inspecting variables CONNEXTDDS_DIR, and NDDSHOME (in this order). If any of
+# these variables is set to a non-empty value, the script will assume it points
+# to a Connext installation and it will copy it into the container image. If
+# multiple target libraries are installed, you must use CONNEXTDDS_ARCH to
+# specify the architecture to use.
 #
-# Before running this script, make sure to create this directory and to copy
-# (or symlink) the required files inside it. For example:
+# If Connext is not installed on the host (or if you want to use a different
+# version than the one used by the host), RTI Connext DDS can also be installed
+# using the official installers provided by RTI. Set variable
+# CONNEXTDDS_FROM_RTIPKG to a non-empty value to use this mode.
 #
-#  mkdir connext_docker_workspace/resource/docker/archives
-#  cp rti_connext_dds-6.1.0-pro-host-x64Linux.run \
-#     rti_connext_dds-6.1.0-pro-target-x64Linux4gcc7.3.0.rtipkg \
-#     rti_license.dat \
-#     connext_docker_workspace/resource/docker/archives
+# The location of the required files must be specified using variables
+# CONNEXTDDS_INSTALLER_HOST, CONNEXTDDS_INSTALLER_TARGET, and
+# CONNEXTDDS_INSTALLER_LICENSE.
 #
-# You can use variables CONNEXTDDS_VERSION, CONNEXTDDS_HOST_ARCH, and
-# CONNEXTDDS_ARCH to allow the Dockerfile to guess the correct name of the
-# installers to use. Alternatively, you may also explicitly provide the name
-# of the host and target bundles using variables CONNEXTDDS_INSTALLER_HOST and
-# CONNEXTDDS_INSTALLER_TARGET. You can specify a custom name for the license
-# file with variable CONNEXTDDS_INSTALLER_LICENSE.
-#
-# Alternatively, you can have the script copy a preinstalled copy of Connext
-# from the host machine. You must copy (or symlink) this directory inside
-# `connext_docker_workspace/resource/docker/archives` and specify its name using
-# variable CONNEXTDDS_HOST_DIR. You must also specify the target architecture to
-# use with variable CONNEXTDDS_ARCH.
-#
-# You can also build a container image using the community-licensed version of
-# Connext DDS provided by Debian package rti-connext-dds-6.0.1. This image can
-# only be used for pre-production and non-commercial purposes.
-# In order to use it, set variable CONNEXTDDS_COMMUNITY to a non-empty value,
-# e.g.: `export CONNEXTDDS_COMMUNITY=y`.
+# Finally, you can also build a container image using the community-licensed
+# version of Connext DDS which is distributed by Debian package
+# rti-connext-dds-6.0.1.
+# This image can only be used for pre-production and non-commercial purposes.
+# In order to use it, set variable CONNEXTDDS_FROM_DEB to a non-empty value,
+# e.g.: `export CONNEXTDDS_FROM_DEB=y`.
 #
 # In all cases, the generated image will be tagged as `rmw_connextdds:latest`.
 # You can specify a custom tag using variable DOCKER_IMAGE.
@@ -99,8 +90,17 @@ check_container_status()
 }
 
 ################################################################################
+# Helper function to log messages to the console
+################################################################################
+log_info()
+{
+  printf -- "\e[0;32m-- %s\e[0;0m\n" "$@"
+}
+
+################################################################################
 # Begin script
 ################################################################################
+SH_CWD=$(pwd)
 SH_DIR=$(cd "$(dirname "$0")" > /dev/null 2>&1 && pwd) 
 REPO_DIR=$(cd "${SH_DIR}/../.." && pwd)
 
@@ -111,58 +111,152 @@ REPO_DIR=$(cd "${SH_DIR}/../.." && pwd)
 : "${DOCKER_GID:=$(id -g)}"
 : "${DOCKER_IMAGE:="rmw_connextdds:latest"}"
 : "${DOCKER_DIR:=${REPO_DIR}/connext_docker_workspace/resource/docker}"
-: "${DOCKER_FILE_DEB:=${DOCKER_DIR}/Dockerfile.rmw_connextdds.community}"
+: "${DOCKER_FILE_DEB:=${DOCKER_DIR}/Dockerfile.rmw_connextdds.deb}"
 : "${DOCKER_FILE_RTIPKG:=${DOCKER_DIR}/Dockerfile.rmw_connextdds.rtipkg}"
 : "${DOCKER_FILE_HOST:=${DOCKER_DIR}/Dockerfile.rmw_connextdds.host}"
+: "${CONNEXTDDS_VERSION:=6.1.0}"
+: "${CONNEXTDDS_HOST_ARCH:=x64Linux}"
+: "${CONNEXTDDS_ARCH:=x64Linux4gcc7.3.0}"
 
 # Remove the container if it exists and it's in "exited" status
 if [ "$(check_container_status ${DOCKER_CONTAINER} exited)" ]; then
+    log_info "removing docker container: ${DOCKER_CONTAINER}"
     docker rm ${DOCKER_CONTAINER} > /dev/null
 fi
 
 # Check if a container with the selected name is already running.
 if [ "$(check_container_status ${DOCKER_CONTAINER} running)" ]; then
+    log_info "attaching to docker container: ${DOCKER_CONTAINER}"
+    [ -z "$@" ] || log_info "with command: $@"
     docker exec -it -u ${DOCKER_USER} \
-      --workdir "${WORKSPACE_DIR}" \
+      --workdir /workspace \
       ${DOCKER_CONTAINER} \
       /bin/bash \
       $@
     exit 0
 fi
 
+# Determine the method of installation for RTI Connext DDS:
+# - If CONNEXTDDS_FROM_DEB, use Debian package-based installation
+# - If CONNEXTDDS_FROM_RTIPKG, use official RTI installers.
+# - Otherwise default to use host installation
+DOCKER_FILE="${DOCKER_FILE_HOST}"
+if [ -n "${CONNEXTDDS_FROM_DEB}" ]; then
+  DOCKER_FILE="${DOCKER_FILE_DEB}"
+elif [ -n "${CONNEXTDDS_FROM_RTIPKG}" ]; then
+  DOCKER_FILE="${DOCKER_FILE_RTIPKG}"
+fi
+
+
+# The Dockerfiles expect all external files to be provided in the
+# build context's "archives/" subdirectory. We achieve this by collecting
+# all files into a temporary tar.gz archive.
+: "${DOCKER_BUILD_TAG:=$(date +%s)}"
+: "${DOCKER_BUILD_CONTEXT:=/tmp/rmw_connextdds-docker-ctx-${DOCKER_BUILD_TAG}}"
+
+(
+  # Create initial context with files shared by all images
+  rm -rf "${DOCKER_BUILD_CONTEXT}"
+  mkdir -p "${DOCKER_BUILD_CONTEXT}/archives"
+  cd "${DOCKER_BUILD_CONTEXT}"
+  cp -r "${REPO_DIR}/connext_docker_workspace/resource/docker/scripts" .
+  cp "${DOCKER_FILE}" Dockerfile
+  log_info "generating context archive: ${DOCKER_BUILD_CONTEXT}.tar"
+  tar cf "${DOCKER_BUILD_CONTEXT}.tar" *
+  rm -rf "${DOCKER_BUILD_CONTEXT}"
+)
+# Create a trap to delete the context archive on exit
+trap 'rm -rf "${DOCKER_BUILD_CONTEXT}.tar"; trap - EXIT; exit' EXIT INT HUP TERM
+
+# Helper function to add files to the context tar archive
+add_to_context()
+{
+  local file_path="${1}" \
+    ctx_prefix="${2}"
+  
+  # make sure ctx_prefix doesn't end with a /
+  ctx_prefix=${ctx_prefix%%/}
+
+  (
+    cd $(dirname "${file_path}")
+    # This operation requires GNU tar and its "--transform" option to
+    # prepend a prefix while adding the file
+    file_name="$(basename "${file_path}")"
+    log_info "adding to context: ${file_path} -> ${ctx_prefix}/${file_name}"
+    tar rf "${DOCKER_BUILD_CONTEXT}.tar" \
+      --transform "s+^+${ctx_prefix}/+" \
+      "${file_name}"
+  )
+}
+
 export_docker_arg BASE_IMAGE
 export_docker_arg DOCKER_USER
 export_docker_arg DOCKER_UID
 export_docker_arg DOCKER_GID
+export_docker_arg RMW_CONNEXTDDS_URL
+export_docker_arg RMW_CONNEXTDDS_BRANCH
 
-if [ -n "${CONNEXTDDS_COMMUNITY}" ]; then
-  DOCKER_FILE="${DOCKER_FILE_DEB}"
-elif [ -n "${CONNEXTDDS_HOST_DIR}" ]; then
-  DOCKER_FILE="${DOCKER_FILE_HOST}"
-  export_docker_arg CONNEXTDDS_HOST_DIR
-  export_docker_arg CONNEXTDDS_ARCH
-else
-  DOCKER_FILE="${DOCKER_FILE_RTIPKG}"
-  export_docker_arg CONNEXTDDS_VERSION
-  export_docker_arg CONNEXTDDS_HOST_ARCH
-  export_docker_arg CONNEXTDDS_ARCH
+case "${DOCKER_FILE}" in
+${DOCKER_FILE_DEB})
+  # Nothing else to do for this installation method
+  ;;
+${DOCKER_FILE_RTIPKG})
+  # Detect paths of required files and add them to the context archive
+  : "${CONNEXTDDS_INSTALLER_HOST:=${SH_CWD}/rti_connext_dds-6.1.0-pro-host-x64Linux.run}"
+  : "${CONNEXTDDS_INSTALLER_TARGET:=${SH_CWD}/rti_connext_dds-6.1.0-pro-target-x64Linux4gcc7.3.0.rtipkg}"
+  : "${CONNEXTDDS_INSTALLER_LICENSE:=${SH_CWD}/rti_license.dat}"
+
+  add_to_context "${CONNEXTDDS_INSTALLER_HOST}" archives/
+  add_to_context "${CONNEXTDDS_INSTALLER_TARGET}" archives/
+  add_to_context "${CONNEXTDDS_INSTALLER_LICENSE}" archives/
+
+  # The Dockerfiles expect the installer variables to only contain the file
+  # names, so update the variables and export them as build arguments.
+  CONNEXTDDS_INSTALLER_HOST=$(basename "${CONNEXTDDS_INSTALLER_HOST}")
+  CONNEXTDDS_INSTALLER_TARGET=$(basename "${CONNEXTDDS_INSTALLER_TARGET}")
+  CONNEXTDDS_INSTALLER_LICENSE=$(basename "${CONNEXTDDS_INSTALLER_LICENSE}")
+
   export_docker_arg CONNEXTDDS_INSTALLER_HOST
   export_docker_arg CONNEXTDDS_INSTALLER_TARGET
   export_docker_arg CONNEXTDDS_INSTALLER_LICENSE
-fi
+  export_docker_arg CONNEXTDDS_VERSION
+  export_docker_arg CONNEXTDDS_ARCH
+  ;;
+${DOCKER_FILE_HOST})
+  if [ -z "${CONNEXTDDS_DIR}" -a -n "${NDDSHOME}" ]; then
+    CONNEXTDDS_DIR="${NDDSHOME}"
+  else
+    printf "ERROR: no Connext DDS installation detected.\n" >&2
+    exit 1
+  fi
+  add_to_context "${CONNEXTDDS_DIR}" archives/
 
-set -x
+  CONNEXTDDS_HOST_DIR=$(basename "${CONNEXTDDS_DIR}")
+  export_docker_arg CONNEXTDDS_HOST_DIR
+  export_docker_arg CONNEXTDDS_ARCH
+  ;;
+esac
 
-docker build "${DOCKER_DIR}" \
-  -f "${DOCKER_FILE}" \
-  -t "${DOCKER_IMAGE}" \
-  ${DOCKER_BUILD_ARGS}
+log_info "building docker image: ${DOCKER_IMAGE}"
+(
+  set -x
+  cat "${DOCKER_BUILD_CONTEXT}.tar" | docker build - \
+    -t "${DOCKER_IMAGE}" \
+    ${DOCKER_BUILD_ARGS}
+)
 
-docker run -it --rm \
-  --network host \
-  -v "${WORKSPACE_DIR}:/workspace" \
-  --name "${DOCKER_CONTAINER}" \
-  --user "${DOCKER_USER}" \
-  --workdir /workspace \
-  "${DOCKER_IMAGE}" \
-  $@
+log_info "running docker container: ${DOCKER_CONTAINER}"
+[ -z "$@" ] || log_info "with command: $@"
+(
+  set -x
+  docker run -it --rm \
+    --network host \
+    -v "${WORKSPACE_DIR}:/workspace" \
+    --name "${DOCKER_CONTAINER}" \
+    --user "${DOCKER_USER}" \
+    --workdir /workspace \
+    -e DISPLAY=$DISPLAY \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    "${DOCKER_IMAGE}" \
+    $@
+)

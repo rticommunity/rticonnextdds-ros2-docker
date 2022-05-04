@@ -27,63 +27,54 @@ mounts a local directory (i.e. your ROS 2 project), enabling you to quickly buil
 
    You can provision RTI Connext DDS inside the container in multiple ways:
 
-   - Use an RTI Connext DDS installation from the host:
+   - Use an RTI Connext DDS installation from the host (default):
 
-     - Copy the Connext installation directory inside
-       `connext_docker_workspace/resource/docker/archives`. E.g.
-       if using Connext DDS 6.1.0:
+     ```sh
+     WORKSPACE_DIR=/path/to/workspace-directory \
+     CONNEXTDDS_DIR=/path/to/rti_connext_dds-6.1.0 \
+     connext_docker_workspace/scripts/run_workspace.sh
+     ```
 
-       ```sh
-       mkdir connext_docker_workspace/resource/docker/archives
-       cp -r \
-         /path/to/rti_connext_dds-6.1.0 \
-         connext_docker_workspace/resource/docker/archives/
-       ```
+     - Specify the Connext installation with variables `CONNEXTDDS_DIR`, or
+       `NDDSHOME`.
 
-     - Build and start the container. Specify the name of the installation
-       directory using variable `CONNEXTDDS_HOST_DIR`, e.g.:
-
-       ```sh
-       WORKSPACE_DIR=/path/to/workspace-directory \
-       CONNEXTDDS_HOST_DIR=rti_connext_dds-6.1.0 \
-       connext_docker_workspace/scripts/run_workspace.sh
-       ```
+     - You can optionally use `CONNEXTDDS_ARCH` to specify the target architecture to use.
 
    - Install RTI Connext DDS using the official installers:
 
-     - Copy the installers (host and target), and your license file
-       inside `connext_docker_workspace/resource/docker/archives`, e.g.:
+     ```sh
+     WORKSPACE_DIR=/path/to/workspace-directory \
+     CONNEXTDDS_FROM_RTIPKG=y \
+     CONNEXTDDS_INSTALLER_HOST=/path/to/rti_connext_dds-6.1.0-pro-host-x64Linux.run \
+     CONNEXTDDS_INSTALLER_TARGET=/path/to/rti_connext_dds-6.1.0-pro-target-x64Linux4gcc7.3.0.rtipkg \
+     CONNEXTDDS_INSTALLER_LICENSE=/path/to/rti_license.dat \
+     CONNEXTDDS_VERSION=6.1.0 \
+     connext_docker_workspace/scripts/run_workspace.sh
+     ```
 
-       ```sh
-       mkdir connext_docker_workspace/resource/docker/archives
-       ln -s \
-          /path/to/rti_connext_dds-6.1.0-pro-host-x64Linux.run \
-          /path/to/rti_connext_dds-6.1.0-pro-target-x64Linux4gcc7.3.0.rtipkg \
-          /path/to/rti_license.dat \
-          connext_docker_workspace/resource/docker/archives/
-       ```
+     - The following files are required:
 
-     - Build and start the container:
+       - A host installer (`CONNEXTDDS_INSTALLER_HOST`).
+       - A target installer (`CONNEXTDDS_INSTALLER_TARGET`).
+       - A license file (`CONNEXTDDS_INSTALLER_LICENSE`).
 
-       ```sh
-       WORKSPACE_DIR=/path/to/workspace-directory \
-       connext_docker_workspace/scripts/run_workspace.sh
-       ```
+     - Variable `CONNEXTDDS_VERSION` is required to let the Dockerfile detect
+       RTI Connext DDS' installation directory.
 
    - Install RTI Connext DDS using a Debian package (x86_64 only):
+
+     ```sh
+     WORKSPACE_DIR=/path/to/workspace \
+     CONNEXTDDS_FROM_DEB=y \
+     connext_docker_workspace/scripts/run_workspace.sh
+     ```
 
      - The community-licensed version included in the binary package distributed
        via the ROS 2 Debian repository can only be used for non-commercial and
        pre-production applications.
 
-     - Build and start the container with variable CONNEXTDDS_DEB
+     - Build and start the container with variable CONNEXTDDS_FROM_DEB
        set to a non-empty value:
-
-       ```sh
-       WORKSPACE_DIR=/path/to/workspace \
-       CONNEXTDDS_DEB=y \
-       connext_docker_workspace/scripts/run_workspace.sh
-       ```
 
 4. Build your ROS 2 code and run it with Connext.
 
@@ -131,10 +122,11 @@ defined by each included image. If specified, these variables will be
 automatically detected, and passed to the `docker build` command.
 
 ### Docker Compose Example 
+
 You can use the following command to run talker and listener on different Docker containers. This example uses the shared memory transport. 
 
 ```sh
-WORKSPACE_DIR=/path/to/workspace-directory \
+WORKSPACE_DIR=$(pwd) \
 docker-compose -f connext_docker_workspace/resource/docker_compose/docker-compose.yaml up -d
 ```
 
@@ -168,8 +160,10 @@ This Dockerfile will generate a development image which contains a copy of
 RTI Connext DDS which has been pre-installed on the host machine.
 
 The Dockerfile will copy this installation specified by argument
-`CONNEXTDDS_DIR` "as is".
-This directory must contain a valid license file and target libraries.
+`CONNEXTDDS_HOST_DIR` "as is".
+This directory must be located under `archives/` in the build context, and it
+must contain a valid license file and target libraries.
+
 If multiple target libraries are installed, the desired target architecture must be specified using argument `CONNEXTDDS_ARCH`.
 
 #### Build Arguments for Dockerfile.rmw_connextdds.host
@@ -177,7 +171,7 @@ If multiple target libraries are installed, the desired target architecture must
 | Variable | Description | Default Value |
 |----------|-------------|---------------|
 |`CONNEXTDDS_ARCH`|Target architecture to use. |None|
-|`CONNEXTDDS_HOST_DIR`|Directory containing the installation of RTI Connext DDS to use inside the container|None|
+|`CONNEXTDDS_HOST_DIR`|Name of the subdirectory of `archives/`, containing the installation of RTI Connext DDS to use inside the container|None|
 
 ### Dockerfile.rmw_connextdds.rtipkg
 
@@ -185,33 +179,26 @@ This Dockerfile will generate a development image which contains a copy
 of RTI Connext DDS installed from the official bundles provided by RTI.
 
 The Dockerfile expects to find the required installers in subdirectory
-`archives/`. Files must be either symlinked or copied inside this directory for
-them to be sent to the Docker daemon as part of the build context. They will
-then be copied inside the generated image.
+`archives/` of the docker build context.
 
 Beside the target and host installers, you will also need to provide a valid
 license file.
-
-The Dockerfile will try to guess the name of the installers to use based on
-arguments `CONNEXTDDS_ARCH`, `CONNEXTDDS_HOST_ARCH`, and `CONNEXTDDS_VERSION`.
-The license file is expected to be named `rti_license.dat`.
 
 You can specify the full name of the installers, and the license
 file using arguments `CONNEXTDDS_INSTALLER_HOST`, `CONNEXTDDS_INSTALLER_TARGET`,
 and `CONNEXTDDS_INSTALLER_LICENSE`.
 
-You must always make sure that `CONNEXTDDS_ARCH` matches your installation, even when providing explicit installer names, in order to properly initialize the environment inside the container.
+You must also make sure to specify argument `CONNEXTDDS_VERSION` if different
+than the default.
 
 #### Build Arguments for Dockerfile.rmw_connextdds.rtipkg
 
 | Variable | Description | Default Value |
 |----------|-------------|---------------|
-|`CONNEXTDDS_ARCH`|Target architecture, used to guess the name of the target bundle and to select the target libraries to use when building `rmw_connextdds`.|`x64Linux4gcc7.3.0`|
-|`CONNEXTDDS_HOST_ARCH`|Host architecture, used to guess the name of the host bundle.|`x64Linux`|
-|`CONNEXTDDS_INSTALLER_HOST`|Full name (without path) of the host bundle which will be used instead of trying to derive it from other parameters|`rti_connext_dds-${CONNEXTDDS_VERSION}-pro-host-${CONNEXTDDS_HOST_ARCH}.run`|
-|`CONNEXTDDS_INSTALLER_LICENSE`|Name (without path) of the license file.|`rti_license.dat`|
-|`CONNEXTDDS_INSTALLER_TARGET`|Full name (without path) of the target bundle which will be used instead of trying to derive it from other parameters|`rti_connext_dds-${CONNEXTDDS_VERSION}-pro-target-${CONNEXTDDS_ARCH}.rtipkg`|
-|`CONNEXTDDS_VERSION`|Version identifier for Connext DDS, used to guess the name of the host and target bundles|`6.1.0`|
+|`CONNEXTDDS_INSTALLER_HOST`|File name (without path) of the host bundle|`rti_connext_dds-6.1.0-pro-host-x64Linux.run`|
+|`CONNEXTDDS_INSTALLER_LICENSE`|File name (without path) of the license file.|`rti_license.dat`|
+|`CONNEXTDDS_INSTALLER_TARGET`|File name (without path) of the target bundle|`rti_connext_dds-6.1.0-pro-target-x64Linux4gcc7.3.0.rtipkg`|
+|`CONNEXTDDS_VERSION`|Version identifier for Connext DDS. |`6.1.0`|
 
 ### Dockerfile.rmw_connextdds.deb
 

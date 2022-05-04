@@ -32,37 +32,16 @@ FROM ${BASE_IMAGE} AS base_env
 ################################################################################
 # The Dockerfile will install Connext inside the container using the official
 # installers. 
-# 
-# The installers must be either copied or symlinked in the `archives/`
-# sub-directory so that they may be sent to the Docker daemon, e.g.:
 #
-#   mkdir connext_node_helpers/resource/docker/archives
-#   cp /path/to/packages/*\.{rtipkg,run} \
-#      connext_node_helpers/resource/docker/archives/
-#
-# The Dockerfile will automatically guess the name of the required host and
-# target installers based on build arguments CONNEXTDDS_VERSION,
-# CONNEXTDDS_HOST_ARCH, and CONNEXTDDS_ARCH.
-#
-# You must also provide a valid license file by copying it in the `archives`
-# sub-directory:
-#
-#   cp /path/to/my/rti_license.dat \
-#      connext_node_helpers/resource/docker/archives/rti_license.dat
-#
-# The script will also load Connext DDS into the shell environment by setting
-# CONNEXTDDS_DIR, so that rmw_connextdds may later pick it up during build.
-#
+# The name of the installer and license files are expected to be located in
+# the archives/ subdirectory.
 ################################################################################
-ARG CONNEXTDDS_VERSION=6.1.0
-ARG CONNEXTDDS_HOST_ARCH=x64Linux
-ARG CONNEXTDDS_ARCH=x64Linux4gcc7.3.0
-ARG CONNEXTDDS_INSTALLER_HOST=rti_connext_dds-${CONNEXTDDS_VERSION}-pro-host-${CONNEXTDDS_HOST_ARCH}.run
-ARG CONNEXTDDS_INSTALLER_TARGET=rti_connext_dds-${CONNEXTDDS_VERSION}-pro-target-${CONNEXTDDS_ARCH}.rtipkg
+ARG CONNEXTDDS_INSTALLER_HOST=rti_connext_dds-6.1.0-pro-host-x64Linux.run
+ARG CONNEXTDDS_INSTALLER_TARGET=rti_connext_dds-6.1.0-pro-target-x64Linux4gcc7.3.0.rtipkg
 ARG CONNEXTDDS_INSTALLER_LICENSE=rti_license.dat
+ARG CONNEXTDDS_VERSION=6.1.0
+ARG CONNEXTDDS_ARCH=
 
-ENV CONNEXTDDS_VERSION=${CONNEXTDDS_VERSION}
-ENV CONNEXTDDS_HOST_ARCH=${CONNEXTDDS_HOST_ARCH}
 ENV CONNEXTDDS_ARCH=${CONNEXTDDS_ARCH}
 ENV CONNEXTDDS_INSTALLER_HOST=${CONNEXTDDS_INSTALLER_HOST}
 ENV CONNEXTDDS_INSTALLER_TARGET=${CONNEXTDDS_INSTALLER_TARGET}
@@ -110,19 +89,25 @@ COPY --from=install ${CONNEXTDDS_DIR} ${CONNEXTDDS_DIR}
 # The `master` branch will be used if ROS_DISTRO is "rolling".
 # Otherwise the branch corresponding to the specified ROS_DISTRO will be used.
 ################################################################################
-RUN if [ "${ROS_DISTRO}" = "rolling" ]; then\
+ARG RMW_CONNEXTDDS_URL=https://github.com/ros2/rmw_connextdds
+ARG RMW_CONNEXTDDS_BRANCH=
+RUN if [ -n "${RMW_CONNEXTDDS_BRANCH}" ]; then \
+      rmw_branch="${RMW_CONNEXTDDS_BRANCH}"; \
+    elif [ "${ROS_DISTRO}" = "rolling" ]; then\
       rmw_branch="master";\
     else\
       rmw_branch="${ROS_DISTRO}";\
     fi \
     && git clone -b ${rmw_branch} \
-           https://github.com/ros2/rmw_connextdds \
+           ${RMW_CONNEXTDDS_URL} \
            /tmp/rmw_connextdds
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
     && cd /tmp/rmw_connextdds \
-    && MAKEFLAGS=-j$(nproc) colcon build --symlink-install \
-          --cmake-args -DCONNEXTDDS_ARCH=${CONNEXTDDS_ARCH} \
+    && if [ -n "${CONNEXTDDS_ARCH}" ]; then \
+        build_args="--cmake-args -DCONNEXTDDS_ARCH=${CONNEXTDDS_ARCH}";\
+    fi \
+    && MAKEFLAGS=-j$(nproc) colcon build --symlink-install ${build_args} \
     && mv install ${RMW_CONNEXTDDS_INSTALL_DIR}
 
 ################################################################################

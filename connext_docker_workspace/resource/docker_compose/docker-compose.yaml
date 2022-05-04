@@ -1,3 +1,4 @@
+version: "3"
 services:
   talker:
     image: "rmw_connextdds"
@@ -6,9 +7,9 @@ services:
       - "${WORKSPACE_DIR}:/workspace"
     environment:
       RMW_IMPLEMENTATION: rmw_connextdds
-      NDDS_QOS_PROFILES: /workspace/resource/connext/example_custom_qos.xml 
+      NDDS_QOS_PROFILES: /workspace/connext_docker_workspace/resource/connext/example_custom_qos.xml 
     working_dir: /workspace
-    command: /bin/sh -c "colcon build --symlink-install && ros2 run demo_nodes_cpp talker"
+    command: /bin/sh -c "ros2 run demo_nodes_cpp talker"
   listener:
     image: "rmw_connextdds"
     ipc: host
@@ -16,6 +17,6 @@ services:
       - "${WORKSPACE_DIR}:/workspace"
     environment:
       RMW_IMPLEMENTATION: rmw_connextdds
-      NDDS_QOS_PROFILES: /workspace/resource/connext/example_custom_qos.xml 
+      NDDS_QOS_PROFILES: /workspace/connext_docker_workspace/resource/connext/example_custom_qos.xml 
     working_dir: /workspace
-    command: /bin/sh -c "colcon build --symlink-install && ros2 run demo_nodes_cpp listener"
+    command: /bin/sh -c "ros2 run demo_nodes_cpp listener"
