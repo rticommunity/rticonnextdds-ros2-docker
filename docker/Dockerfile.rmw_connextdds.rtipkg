@@ -49,7 +49,6 @@ ENV CONNEXTDDS_INSTALLER_LICENSE=${CONNEXTDDS_INSTALLER_LICENSE}
 ENV CONNEXTDDS_INSTALLER_DIR=/archives
 ENV CONNEXTDDS_INSTALL_PREFIX=/opt/rti.com
 ENV CONNEXTDDS_DIR=${CONNEXTDDS_INSTALL_PREFIX}/rti_connext_dds-${CONNEXTDDS_VERSION}
-ENV RMW_CONNEXTDDS_INSTALL_DIR=/opt/ros/${ROS_DISTRO}-connext
 
 ################################################################################
 # Define a new  build stage to install Connext DDS and build rmw_connextdds.
@@ -89,6 +88,8 @@ COPY --from=install ${CONNEXTDDS_DIR} ${CONNEXTDDS_DIR}
 # The `master` branch will be used if ROS_DISTRO is "rolling".
 # Otherwise the branch corresponding to the specified ROS_DISTRO will be used.
 ################################################################################
+ARG RMW_CONNEXTDDS_DIR=/opt/rmw_connextdds
+ENV RMW_CONNEXTDDS_DIR=${RMW_CONNEXTDDS_DIR}
 ARG RMW_CONNEXTDDS_URL=https://github.com/ros2/rmw_connextdds
 ARG RMW_CONNEXTDDS_BRANCH=
 RUN if [ -n "${RMW_CONNEXTDDS_BRANCH}" ]; then \
@@ -98,17 +99,14 @@ RUN if [ -n "${RMW_CONNEXTDDS_BRANCH}" ]; then \
     else\
       rmw_branch="${ROS_DISTRO}";\
     fi \
-    && git clone -b ${rmw_branch} \
-           ${RMW_CONNEXTDDS_URL} \
-           /tmp/rmw_connextdds
+    && git clone -b ${rmw_branch} ${RMW_CONNEXTDDS_URL} ${RMW_CONNEXTDDS_DIR}
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
-    && cd /tmp/rmw_connextdds \
+    && cd ${RMW_CONNEXTDDS_DIR} \
     && if [ -n "${CONNEXTDDS_ARCH}" ]; then \
         build_args="--cmake-args -DCONNEXTDDS_ARCH=${CONNEXTDDS_ARCH}";\
     fi \
-    && MAKEFLAGS=-j$(nproc) colcon build --symlink-install ${build_args} \
-    && mv install ${RMW_CONNEXTDDS_INSTALL_DIR}
+    && MAKEFLAGS=-j$(nproc) colcon build --symlink-install ${build_args}
 
 ################################################################################
 # Configure the environment so that rmw_connextdds is used automatically.
@@ -116,25 +114,7 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
 ENV RMW_IMPLEMENTATION=rmw_connextdds
 
 ################################################################################
-# Add a non-root user/group which will be mapped to the user/group running the
-# container in the host system.
+# Add a bashrc file to automatically load the RMW and ROS 2.
 ################################################################################
-ARG DOCKER_USER=admin
-ARG DOCKER_UID=1000
-ARG DOCKER_GID=1000
-
-RUN groupadd --gid ${DOCKER_GID} ${DOCKER_USER}
-RUN useradd --uid ${DOCKER_UID} --gid ${DOCKER_GID} -m ${DOCKER_USER}
-RUN echo ${DOCKER_USER} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${DOCKER_USER} \
-    && chmod 0440 /etc/sudoers.d/${DOCKER_USER} \
-    && adduser ${DOCKER_USER} sudo
-
-################################################################################
-# Set the container's entrypoint to a custom script which will load ROS and
-# rmw_connextdds in the environment then execute the user provided command, or
-# start a shell if no command was specified
-################################################################################
-COPY scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-ENTRYPOINT [ "/entrypoint.sh" ]
-CMD ["__default__"]
+RUN printf -- "source ${RMW_CONNEXTDDS_DIR}/install/setup.bash\n" \
+  >> /etc/bash.bashrc

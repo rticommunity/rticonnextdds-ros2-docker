@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Some helper functions to print log messages
 log_msg()
@@ -26,7 +26,7 @@ log_error()
 }
 
 # rtiddsgen does not currently support gcc 11. Check if the gcc version
-# if compatible, otherwise print a warning for the user
+# is compatible, otherwise print a warning for the user
 (
   gcc_version=$(
     gcc --version | head -1 | rev | awk '{print $1;}' | rev) 2>/dev/null
@@ -50,11 +50,3 @@ log_error()
     )
   fi
 )
-
-source ${RMW_CONNEXTDDS_INSTALL_DIR}/setup.bash
-
-if [ "$@" = "__default__" ]; then
-  exec /bin/bash
-else
-  exec "$@"
-fi

@@ -1,0 +1,20 @@
+version: "3"
+services:
+  talker:
+    image: "rmw_connextdds:latest"
+    ipc: host
+    volumes:
+      - "${WORKSPACE_DIR}:/workspace"
+    environment:
+      NDDS_QOS_PROFILES: /workspace/resource/connext/example_custom_qos.xml 
+    working_dir: /workspace
+    command: /bin/sh -c ". $${RMW_CONNEXTDDS_DIR}/install/setup.sh && ros2 run demo_nodes_cpp talker"
+  listener:
+    image: "rmw_connextdds:latest"
+    ipc: host
+    volumes:
+      - "${WORKSPACE_DIR}:/workspace"
+    environment:
+      NDDS_QOS_PROFILES: /workspace/resource/connext/example_custom_qos.xml 
+    working_dir: /workspace
+    command: /bin/sh -c ". $${RMW_CONNEXTDDS_DIR}/install/setup.sh && ros2 run demo_nodes_cpp listener"

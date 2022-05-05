@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>connext_docker_workspace</name>
-  <version>0.1.0</version>
-  <description>Docker containers for easy development of ROS 2 applications with RTI Connext DDS</description>
+  <name>example_workspace</name>
+  <version>0.0.1</version>
+  <description>An example ROS 2 package used to test the rmw_connextdds Docker images</description>
   <maintainer email="asorbini@rti.com">asorbini</maintainer>
   <license>RTI-FREE-TO-USE</license>
 

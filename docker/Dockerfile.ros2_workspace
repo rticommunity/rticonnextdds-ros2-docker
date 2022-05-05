@@ -1,0 +1,54 @@
+################################################################################
+# (c) 2022 Copyright, Real-Time Innovations, Inc. (RTI) All rights reserved.
+# RTI grants Licensee a license to use, modify, compile, and create derivative
+# works of the Software solely in combination with RTI Connext DDS. Licensee
+# may redistribute copies of the Software provided that all such copies are
+# subject to this License. The Software is provided "as is", with no warranty
+# of any type, including any warranty for fitness for any purpose. RTI is
+# under no obligation to maintain or support the Software. RTI shall not be
+# liable for any incidental or consequential damages arising out of the use or
+# inability to use the Software. For purposes of clarity, nothing in this
+# License prevents Licensee from using alternate versions of DDS, provided
+# that Licensee may not combine or link such alternate versions of DDS with
+# the Software.
+################################################################################
+# This Dockerfile can be used to create containers to run and develop
+# ROS 2 applications with RTI Connext DDS.
+# The Dockerfile requires a base image which contains ROS 2, RTI Connext DDS,
+# and rmw_connextdds. A suitable image can be built using one of the
+# "Dockerfile.rmw_connextdds.*" files. 
+# After building it, use argument BASE_NAME to specify the name of the image.
+# The Dockerfile expects the base image to export the install location for 
+# rmw_connextdds via variable RMW_CONNEXTDDS_INSTALL_DIR, which will be used to
+# automatically load the RMW into the shell environment.
+################################################################################
+ARG BASE_IMAGE=rmw_connextdds:latest
+
+FROM ${BASE_IMAGE}
+
+################################################################################
+# Add a non-root user/group which will be mapped to the user/group running the
+# container in the host system.
+################################################################################
+ARG DOCKER_USER=admin
+ARG DOCKER_UID=1000
+ARG DOCKER_GID=1000
+
+RUN groupadd --gid ${DOCKER_GID} ${DOCKER_USER}
+RUN useradd --uid ${DOCKER_UID} --gid ${DOCKER_GID} -m ${DOCKER_USER}
+RUN echo ${DOCKER_USER} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${DOCKER_USER} \
+    && chmod 0440 /etc/sudoers.d/${DOCKER_USER} \
+    && adduser ${DOCKER_USER} sudo
+
+################################################################################
+# Set the container's entrypoint to a custom script which will load ROS and
+# rmw_connextdds in the environment then execute the user provided command, or
+# start a shell if no command was specified
+################################################################################
+COPY scripts/ros2_workspace_entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT [ "/entrypoint.sh" ]
+CMD ["__default__"]
+
+COPY scripts/fix_gcc.sh /fix_gcc.sh
+RUN chmod +x /fix_gcc.sh
