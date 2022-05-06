@@ -18,7 +18,7 @@ software components (ROS 2, RTI Connext DDS, and rmw_connextdds), and a non-root
 2. Clone this repository:
 
    ```sh
-   git clone https://github.com/asorbini/rticonnextdds-ros2-docker
+   git clone https://github.com/rticommunity/rticonnextdds-ros2-docker
    ```
 
 3. Build image `rmw_connextdds:latest`, a base Docker image with ROS 2, RTI
