@@ -86,6 +86,9 @@ if [ "$(check_container_status ${DOCKER_CONTAINER} running)" ]; then
     exit 0
 fi
 
+# Docker requires volume paths to be absolute
+WORKSPACE_DIR=$(cd "${WORKSPACE_DIR}" && pwd)
+
 log_info "running docker container: ${DOCKER_CONTAINER}"
 [ -z "$@" ] || log_info "with command: $@"
 (

@@ -17,7 +17,7 @@ from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
-  cfg_dir = Path(get_package_share_directory("example")) / "connext"
+  cfg_dir = Path(get_package_share_directory("example_workspace")) / "connext"
 
   # Pass some custom environment variables to the launched processes to
   # configure Connext DDS:
