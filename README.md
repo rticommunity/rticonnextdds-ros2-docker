@@ -28,6 +28,10 @@ software components (ROS 2, RTI Connext DDS, and rmw_connextdds), and a non-root
    If you prefer, you can control the name of the generated image using variable
    `DOCKER_IMAGE`.
 
+   By default, the image will use ROS 2 Galactic, provided by image
+   `osrf/ros:galactic-desktop`. If you prefer a different ROS 2 version,
+   select an image from [those available on Docker Hub](https://github.com/osrf/docker_images) and specify it using variable `BASE_IMAGE`.
+
    You can choose between 3 different ways to generate this image, based on
    how RTI Connext DDS is provisioned to it:
 
