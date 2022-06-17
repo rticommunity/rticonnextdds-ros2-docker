@@ -175,8 +175,9 @@ All of the `rmw_connextdds` images should be built on top of one of the
 
 The `Dockerfile.rmw_connextdds.*` files all follow a similar workflow:
 
-- Install RTI Connext DDS.
-- Clone and build `rmw_connextdds`
+- Install RTI Connext DDS, then clone and build `rmw_connextdds`, or...
+- Install both RTI Connext DDS and `rmw_connextdds` from a Debian binary
+  packages.
 - Set `rmw_connextdds` as the default RMW_IMPLEMENTATION
 - Add a bashrc file to automatically load ROS 2 with RTI Connext DDS.
 
@@ -184,17 +185,45 @@ The `ros2_workspace` image uses the `rmw_connextdds` images to generate a
 development environment suitable for mounting and editing a local directory
 from the host machine.
 
+### Dockerfile.rmw_connextdds.bin
+
+This Dockerfile will generate a Docker image which includes a copy of
+RTI Connext DDS installed using the community-licensed package distributed
+via the ROS 2 Debian repository.
+
+`rmw_connextdds` will also be installed using the binary Debian package provided
+in the ROS 2 Debian repository.
+
+#### Build Arguments for Dockerfile.rmw_connextdds.bin
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+|`BASE_IMAGE`|Base Docker image.|`osrf/ros:galactic-desktop`|
+
+#### Manual build of Dockerfile.rmw_connextdds.bin
+
+```sh
+docker build rticonnextdds-ros2-docker/docker \
+             -t rmw_connextdds:latest \
+             -f rticonnextdds-ros2-docker/docker/Dockerfile.rmw_connextdds.bin
+```
+
 ### Dockerfile.rmw_connextdds.deb
 
 This Dockerfile will generate a Docker image which includes a copy of
 RTI Connext DDS installed using the community-licensed package distributed
 via the ROS 2 Debian repository.
 
+`rmw_connextdds` will be built from source.
+
 #### Build Arguments for Dockerfile.rmw_connextdds.deb
 
 | Variable | Description | Default Value |
 |----------|-------------|---------------|
 |`BASE_IMAGE`|Base Docker image.|`osrf/ros:galactic-desktop`|
+|`RMW_CONNEXTDDS_BRANCH`|Branch to build in `rmw_connextdds`'s Git repository|Automatically detected based on `ROS_DISTRO`|
+|`RMW_CONNEXTDDS_DIR`|Container directory where to clone `rmw_connextdds`.|`/opt/rmw_connextdds`|
+|`RMW_CONNEXTDDS_URL`|Clone URL of `rmw_connextdds`'s Git repository|`https://github.com/ros2/rmw_connextdds`|
 
 #### Manual build of Dockerfile.rmw_connextdds.deb
 
@@ -218,6 +247,8 @@ must contain a valid license file and target libraries.
 If multiple target libraries are installed, the desired target architecture should
 be specified using argument `CONNEXTDDS_ARCH`.
 
+`rmw_connextdds` will be built from source.
+
 #### Build Arguments for Dockerfile.rmw_connextdds.host
 
 | Variable | Description | Default Value |
@@ -225,6 +256,9 @@ be specified using argument `CONNEXTDDS_ARCH`.
 |`BASE_IMAGE`|Base Docker image.|`osrf/ros:galactic-desktop`|
 |`CONNEXTDDS_ARCH`|Target architecture to use. ||
 |`CONNEXTDDS_HOST_DIR`|Name of the subdirectory of `archives/`, containing the installation of RTI Connext DDS to use inside the container||
+|`RMW_CONNEXTDDS_BRANCH`|Branch to build in `rmw_connextdds`'s Git repository|Automatically detected based on `ROS_DISTRO`|
+|`RMW_CONNEXTDDS_DIR`|Container directory where to clone `rmw_connextdds`.|`/opt/rmw_connextdds`|
+|`RMW_CONNEXTDDS_URL`|Clone URL of `rmw_connextdds`'s Git repository|`https://github.com/ros2/rmw_connextdds`|
 
 #### Manual build of Dockerfile.rmw_connextdds.host
 
@@ -270,6 +304,9 @@ version identifier for the selected version of RTI Connext DDS.
 |`CONNEXTDDS_INSTALLER_TARGET`|File name (without path) of the target bundle|`rti_connext_dds-6.1.0-pro-target-x64Linux4gcc7.3.0.rtipkg`|
 |`CONNEXTDDS_VERSION`|Version identifier for Connext DDS. |`6.1.0`|
 |`CONNEXTDDS_ARCH`|Target architecture to use. ||
+|`RMW_CONNEXTDDS_BRANCH`|Branch to build in `rmw_connextdds`'s Git repository|Automatically detected based on `ROS_DISTRO`|
+|`RMW_CONNEXTDDS_DIR`|Container directory where to clone `rmw_connextdds`.|`/opt/rmw_connextdds`|
+|`RMW_CONNEXTDDS_URL`|Clone URL of `rmw_connextdds`'s Git repository|`https://github.com/ros2/rmw_connextdds`|
 
 #### Manual build of Dockerfile.rmw_connextdds.rtipkg
 
