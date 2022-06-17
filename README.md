@@ -32,10 +32,11 @@ software components (ROS 2, RTI Connext DDS, and rmw_connextdds), and a non-root
    `osrf/ros:galactic-desktop`. If you prefer a different ROS 2 version,
    select an image from [those available on Docker Hub](https://github.com/osrf/docker_images) and specify it using variable `BASE_IMAGE`.
 
-   You can choose between 3 different ways to generate this image, based on
-   how RTI Connext DDS is provisioned to it:
+   You can choose between 4 different ways to generate this image, based on
+   how RTI Connext DDS and `rmw_connextdds` are provisioned inside it:
 
-   - Use an RTI Connext DDS installation from the host (default):
+   - Use an RTI Connext DDS installation from the host, and build `rmw_connextdds`
+     from source (default):
 
      ```sh
      CONNEXTDDS_DIR=/path/to/rti_connext_dds-6.1.0 \
@@ -47,7 +48,8 @@ software components (ROS 2, RTI Connext DDS, and rmw_connextdds), and a non-root
 
      - You can optionally use `CONNEXTDDS_ARCH` to specify the target architecture to use.
 
-   - Install RTI Connext DDS using the official installers:
+   - Install RTI Connext DDS using the official installers, and build
+     `rmw_connextdds` from source:
 
      ```sh
      CONNEXTDDS_FROM_RTIPKG=y \
@@ -67,16 +69,35 @@ software components (ROS 2, RTI Connext DDS, and rmw_connextdds), and a non-root
      - Variable `CONNEXTDDS_VERSION` is required to let the Dockerfile detect
        the generated RTI Connext DDS installation directory.
 
-   - Install RTI Connext DDS using a Debian package (x86_64 only):
+   - Install RTI Connext DDS using a Debian package and build
+     `rmw_connextdds` from source (x86_64 only):
 
      ```sh
      CONNEXTDDS_FROM_DEB=y \
      rticonnextdds-ros2-docker/scripts/build_image_rmw_connextdds.sh
      ```
 
-     - The community-licensed version included in the binary package distributed
-       via the ROS 2 Debian repository can only be used for non-commercial and
-       pre-production applications.
+     - The community-licensed version of Connext included in the binary package
+       distributed via the ROS 2 Debian repository can only be used for
+       non-commercial and pre-production applications.
+
+   - Install RTI Connext DDS and `rmw_connextdds` using Debian packages
+     (x86_64 only):
+
+     ```sh
+     RMW_CONNEXTDDS_FROM_DEB=y \
+     rticonnextdds-ros2-docker/scripts/build_image_rmw_connextdds.sh
+     ```
+
+     - This installation method requires the base image to include a version of
+       ROS 2 installed from Debian packages (e.g. "osrf/ros:galactic-desktop").
+
+     - `rmw_connextdds` is available as a Debian package only for ROS 2 Galactic
+       and newer.
+
+     - The community-licensed version of Connext included in the binary package
+        distributed via the ROS 2 Debian repository can only be used for
+        non-commercial and pre-production applications.
 
 4. Build image `ros2_workspace:latest`.
 

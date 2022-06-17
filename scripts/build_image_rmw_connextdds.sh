@@ -60,6 +60,7 @@ REPO_DIR=$(cd "${SH_DIR}/.." && pwd)
 
 : "${DOCKER_IMAGE:="rmw_connextdds:latest"}"
 : "${DOCKER_DIR:=${REPO_DIR}/docker}"
+: "${DOCKER_FILE_BIN:=${DOCKER_DIR}/Dockerfile.rmw_connextdds.bin}"
 : "${DOCKER_FILE_DEB:=${DOCKER_DIR}/Dockerfile.rmw_connextdds.deb}"
 : "${DOCKER_FILE_RTIPKG:=${DOCKER_DIR}/Dockerfile.rmw_connextdds.rtipkg}"
 : "${DOCKER_FILE_HOST:=${DOCKER_DIR}/Dockerfile.rmw_connextdds.host}"
@@ -71,7 +72,9 @@ REPO_DIR=$(cd "${SH_DIR}/.." && pwd)
 # - If CONNEXTDDS_FROM_RTIPKG, use official RTI installers.
 # - Otherwise default to use host installation
 DOCKER_FILE="${DOCKER_FILE_HOST}"
-if [ -n "${CONNEXTDDS_FROM_DEB}" ]; then
+if [ -n "${RMW_CONNEXTDDS_FROM_DEB}" ]; then
+  DOCKER_FILE="${DOCKER_FILE_BIN}"
+elif [ -n "${CONNEXTDDS_FROM_DEB}" ]; then
   DOCKER_FILE="${DOCKER_FILE_DEB}"
 elif [ -n "${CONNEXTDDS_FROM_RTIPKG}" ]; then
   DOCKER_FILE="${DOCKER_FILE_RTIPKG}"
@@ -94,8 +97,8 @@ export_docker_build_arg DOCKER_BUILD_ARGS RMW_CONNEXTDDS_URL
 export_docker_build_arg DOCKER_BUILD_ARGS RMW_CONNEXTDDS_BRANCH
 
 case "${DOCKER_FILE}" in
-  ${DOCKER_FILE_DEB})
-    # Nothing else to do for this installation method
+  ${DOCKER_FILE_DEB}|${DOCKER_FILE_BIN})
+    # Nothing else to do for these installation methods
     ;;
   ${DOCKER_FILE_RTIPKG})
     # Detect paths of required files and add them to the context archive
