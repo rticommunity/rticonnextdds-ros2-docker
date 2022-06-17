@@ -36,10 +36,22 @@ RUN export \
       DEBIAN_FRONTEND=noninteractive \
       RTI_NC_LICENSE_ACCEPTED=yes \
     && apt-get update \
-    && apt-get install -y rti-connext-dds-6.0.1
+    && if [ "${ROS_DISTRO}" = "foxy" -o \
+            "${ROS_DISTRO}" = "eloquent" -o \
+            "${ROS_DISTRO}" = "dashing" ]; then \
+         connext_version=5.3.1;\
+         connext_arch=x64Linux3gcc5.4.0;\
+       else\
+         connext_version=6.0.1;\
+         connext_arch=x64Linux4gcc7.3.0;\
+       fi \
+    && apt-get install -y rti-connext-dds-${connext_version}\
+    && rm -f /opt/rti.com/rti_connext_dds \
+    && ln -s /opt/rti.com/rti_connext_dds-${connext_version} /opt/rti.com/rti_connext_dds \
+    && printf "%s" "${connext_arch}" > /opt/rti.com/rti_connext_dds.arch
 
-ENV CONNEXTDDS_DIR=/opt/rti.com/rti_connext_dds-6.0.1
-ENV CONNEXTDDS_ARCH=x64Linux4gcc7.3.0
+
+ENV CONNEXTDDS_DIR=/opt/rti.com/rti_connext_dds
 
 ################################################################################
 # Now that Connext DDS is available, clone rmw_connextdds, load ROS, then build
@@ -63,6 +75,7 @@ RUN if [ -n "${RMW_CONNEXTDDS_BRANCH}" ]; then \
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
     && cd ${RMW_CONNEXTDDS_DIR} \
+    && export CONNEXTDDS_ARCH=$(cat /opt/rti.com/rti_connext_dds.arch)\
     && MAKEFLAGS=-j$(nproc) colcon build --symlink-install
 
 ################################################################################

@@ -1,0 +1,45 @@
+################################################################################
+# (c) 2022 Copyright, Real-Time Innovations, Inc. (RTI) All rights reserved.
+# RTI grants Licensee a license to use, modify, compile, and create derivative
+# works of the Software solely in combination with RTI Connext DDS. Licensee
+# may redistribute copies of the Software provided that all such copies are
+# subject to this License. The Software is provided "as is", with no warranty
+# of any type, including any warranty for fitness for any purpose. RTI is
+# under no obligation to maintain or support the Software. RTI shall not be
+# liable for any incidental or consequential damages arising out of the use or
+# inability to use the Software. For purposes of clarity, nothing in this
+# License prevents Licensee from using alternate versions of DDS, provided
+# that Licensee may not combine or link such alternate versions of DDS with
+# the Software.
+################################################################################
+# This Dockerfile can be used to create containers that will run
+# ROS 2 applications with a copy of RTI Connext DDS installed via binary
+# Debian packages.
+################################################################################
+# This Dockerfile will install rmw_connextdds using an official Debian package.
+# For this reason, the base image must contain a binary installation of ROS 2.
+################################################################################
+ARG BASE_IMAGE=osrf/ros:galactic-desktop
+
+FROM ${BASE_IMAGE}
+
+################################################################################
+# Install rmw_connextdds from the official Debian package. This will also
+# install Connext using the provided Debian package.
+################################################################################
+RUN export \
+      DEBIAN_FRONTEND=noninteractive \
+      RTI_NC_LICENSE_ACCEPTED=yes \
+    && apt-get update \
+    && apt-get install -y ros-${ROS_DISTRO}-rmw-connextdds
+
+################################################################################
+# Configure the environment so that rmw_connextdds is used automatically.
+################################################################################
+ENV RMW_IMPLEMENTATION=rmw_connextdds
+
+################################################################################
+# Add a line to the globash bashrc to automatically load the RMW and ROS 2.
+################################################################################
+RUN printf -- "source /opt/ros/${ROS_DISTRO}/setup.bash\n" \
+  >> /etc/bash.bashrc
