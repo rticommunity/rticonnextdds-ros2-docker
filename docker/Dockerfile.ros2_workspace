@@ -41,6 +41,20 @@ RUN echo ${DOCKER_USER} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${DOCKER_USER
     && adduser ${DOCKER_USER} sudo
 
 ################################################################################
+# Make sure that the system contains a gcc installation not newer than gcc 10,
+# because rtiddsgen does not support gcc 11 or older yet. Use a support script
+# to do this.
+################################################################################
+COPY scripts/rtiddsgen_cpp_fix.sh /rtiddsgen_cpp_fix.sh
+RUN . /rtiddsgen_cpp_fix.sh && \
+    if ! rtiddsgen_check_cpp; then \
+      rtiddsgen_install_cpp; \
+    fi
+RUN printf -- \
+  "[ ! -f /rtiddsgen_cpp_fix.sh ] || source /rtiddsgen_cpp_fix.sh\n" \
+  >> /etc/bash.bashrc
+
+################################################################################
 # Set the container's entrypoint to a custom script which will load ROS and
 # rmw_connextdds in the environment then execute the user provided command, or
 # start a shell if no command was specified
@@ -49,6 +63,3 @@ COPY scripts/ros2_workspace_entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT [ "/entrypoint.sh" ]
 CMD ["__default__"]
-
-COPY scripts/fix_gcc.sh /fix_gcc.sh
-RUN chmod +x /fix_gcc.sh
