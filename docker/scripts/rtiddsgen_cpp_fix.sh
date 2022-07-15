@@ -71,10 +71,10 @@ rtiddsgen_check_cpp()
 
 rtiddsgen_install_cpp()
 {
-  log_warning "Trying to install cpp-10..."
+  log_warning "Trying to install gcc-10..."
   if ! sudo apt-get update ||
-        ! sudo apt-get install -y gcc-10 cpp-10; then
-    log_error "failed to install cpp-10"
+        ! sudo apt-get install -y gcc-10 g++-10; then
+    log_error "failed to install gcc-10"
     log_error "rtiddsgen will not be available unless you install and select an older version.\n" >&2
     log_error "If you prefer not to change your global cpp version, you may also:\n" >&2
     log_error "- select a different C preprocessor with option \`%s\`\n" "-ppPath" >&2
@@ -85,6 +85,6 @@ rtiddsgen_install_cpp()
     log_error "failed to detect cpp-10 after installation"
     return 2
   fi
-  log_info "cpp-10 is now installed."
+  log_info "gcc-10 is now installed."
   log_info "You can run rtiddsgen with arguments:\`-ppPath cpp-10 -ppOption -C\`"
 }
