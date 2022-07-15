@@ -73,7 +73,7 @@ rtiddsgen_install_cpp()
 {
   log_warning "Trying to install cpp-10..."
   if ! sudo apt-get update ||
-        ! sudo apt-get install -y cpp-10; then
+        ! sudo apt-get install -y gcc-10 cpp-10; then
     log_error "failed to install cpp-10"
     log_error "rtiddsgen will not be available unless you install and select an older version.\n" >&2
     log_error "If you prefer not to change your global cpp version, you may also:\n" >&2
