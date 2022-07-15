@@ -47,9 +47,9 @@ detect_cpp_major_version()
 
 rtiddsgen_check_cpp()
 {
-  if ! which cpp; then
+  if ! which cpp >/dev/null 2>&1; then
     log_warning "No C preprocessor detected. Installing default gcc"
-    sudo apt-get install gcc g++
+    sudo apt-get install -y gcc g++
   fi
 
   cpp_major_version=$(detect_cpp_major_version)
