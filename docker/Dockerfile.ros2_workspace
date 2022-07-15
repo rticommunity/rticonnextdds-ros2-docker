@@ -36,6 +36,7 @@ ARG DOCKER_GID=1000
 
 RUN groupadd --gid ${DOCKER_GID} ${DOCKER_USER}
 RUN useradd --uid ${DOCKER_UID} --gid ${DOCKER_GID} -m ${DOCKER_USER}
+RUN apt-get update && apt-get install -y sudo
 RUN echo ${DOCKER_USER} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${DOCKER_USER} \
     && chmod 0440 /etc/sudoers.d/${DOCKER_USER} \
     && adduser ${DOCKER_USER} sudo
