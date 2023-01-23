@@ -168,6 +168,119 @@ docker-compose -f ../docker_compose/docker-compose-talker_listener.yml up
 
 Use `CTRL+C` to terminate the containers.
 
+### ARM Setup
+
+Docker images to use ROS on ARM targets must be built manually using repository
+[osrf/docker_images](https://github.com/osrf/docker_images).
+
+In order to provision Connext, you must first install it on an x86_64 Linux host,
+and then copy the installation to the ARM device where you will build the Docker
+images. If you only plan on using Connext to support `rmw_connextdds`,
+you may restrict this copy to only a subset of the installation.
+
+It is also recommended to replace script `resource/cmake/FindRTIConnextDDS.cmake`
+in the Connext installation with the
+[most recent version made available by RTI](https://github.com/rticommunity/rticonnextdds-cmake-utils/blob/main/cmake/Modules/FindRTIConnextDDS.cmake).
+
+#### ARM Setup Example
+
+1. On a x86_64 Linux host, install the Connext "host" bundle, then use
+   `rtipkginstall` to install a "target" bundle for the desired ARM target, e.g.:
+
+   ```sh
+   ./rti_connext_dds-6.1.1-lm-x64Linux4gcc7.3.0.run
+
+   ~/rti_connext_dds-6.1.1/bin/rtipkginstall rti_connext_dds-6.1.1-lm-target-armv8Linux4gcc7.3.0.rtipkg
+   ```
+
+2. Update `resource/cmake/FindRTIConnextDDS.cmake`:
+
+   ```sh
+   wget -o ~/rti_connext_dds-6.1.1/resource/cmake/FindRTIConnextDDS.cmake \
+     https://raw.githubusercontent.com/rticommunity/rticonnextdds-cmake-utils/main/cmake/Modules/FindRTIConnextDDS.cmake
+   ```
+
+3. Generate an archive with the files required to support `rmw_connextdds`, e.g.:
+
+   ```sh
+   tar czf rti_connext_dds-6.1.1-rmw-runtime.tar.gz \
+       rti_connext_dds-6.1.1/include \
+       rti_connext_dds-6.1.1/lib/armv8Linux4gcc7.3.0 \
+       rti_connext_dds-6.1.1/resource/cmake \
+       rti_connext_dds-6.1.1/resource/scripts \
+       rti_connext_dds-6.1.1/rti_versions.xml
+   ```
+
+   You can also generate the archive using script [generate_connext_rmw_runtime.sh](scripts/generate_connext_rmw_runtime.sh):
+
+   ```sh
+   git clone https://github.com/rticommunity/rticonnextdds-ros2-docker
+
+   rticonnextdds-ros2-docker/scripts/generate_connext_rmw_runtime.sh \
+     ~/rti_connext_dds-6.1.1 \
+     armv8Linux4gcc7.3.0
+   ```
+
+4. Copy and extract archive on ARM target, e.g. (replace `arm-target` with the
+   host name/IP address of your device):
+
+   ```sh
+   scp rti_connext_dds-6.1.1-rmw-runtime.tar.gz arm-target:~/
+
+   ssh arm-target tar xzf rti_connext_dds-6.1.1-rmw-runtime.tar.gz
+   ```
+
+   or, without first copying the archive:
+
+   ```sh
+   cat rti_connext_dds-6.1.1-rmw-runtime.tar.gz | ssh arm-target tar xzf -
+   ```
+
+   or, without even creating an intermediate archive:
+
+   ```sh
+   tar cz \
+       rti_connext_dds-6.1.1/include \
+       rti_connext_dds-6.1.1/lib/armv8Linux4gcc7.3.0 \
+       rti_connext_dds-6.1.1/resource/cmake \
+       rti_connext_dds-6.1.1/resource/scripts \
+       rti_connext_dds-6.1.1/rti_versions.xml | ssh arm-target tar xzf -
+   ```
+
+5. On the ARM target, clone `osrf/docker_images` and build the base ROS image, e.g.:
+
+   ```sh
+   git clone https://github.com/osrf/docker_images
+
+   docker build -t ros:humble-desktop docker_images/ros/humble/ubuntu/jammy/desktop
+   ```
+
+6. Clone this repository and build the `rmw_connextdds` image:
+
+   ```sh
+   git clone https://github.com/rticommunity/rticonnextdds-ros2-docker
+
+   CONNEXTDDS_DIR=~/rti_connext_dds-6.1.1 \
+   BASE_IMAGE=ros:humble-desktop \
+   DOCKER_IMAGE=rmw_connextdds:humble-desktop-6.1.1 \
+   rticonnextdds-ros2-docker/scripts/build_image_rmw_connextdds.sh
+   ```
+
+7. (Optional) Build the `ros2_workspace` image:
+
+   ```sh
+   BASE_IMAGE=rmw_connextdds:humble-desktop-6.1.1 \
+   DOCKER_IMAGE=ros2_workspace:humble-desktop-6.1.1 \
+   rticonnextdds-ros2-docker/scripts/build_image_ros2_workspace.sh
+   ```
+
+8. (Optional) Use the `ros2_workspace` image:
+
+   ```sh
+   DOCKER_IMAGE=ros2_workspace:humble-desktop-6.1.1 \
+   rticonnextdds-ros2-docker/scripts/run_ros2_workspace.sh
+   ```
+
 ## Docker Images
 
 All of the `rmw_connextdds` images should be built on top of one of the
